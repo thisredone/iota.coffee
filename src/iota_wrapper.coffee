@@ -1,4 +1,4 @@
-import IOTA from 'iota.lib.js'
+import IotaLib from 'iota.lib.js'
 import Promise from 'bluebird'
 import useLocalAttachToTangle from './lib/local_attach.js'
 
@@ -13,15 +13,30 @@ class IotaWrapper
     # @changeNode('http://mainnet.necropaz.com:14500')
 
   changeNode: (provider) ->
-    @iota = new IOTA({provider})
+    @iota = new IotaLib({provider})
     @utils = @iota.utils
     @valid = @iota.valid
     useLocalAttachToTangle(@iota)
     Promise.promisifyAll(@iota.api)
 
+  getBalances: (addresses) ->
+    onlyAddresses = addresses
+    onlyAddresses = addresses.map((a) -> a.address) if addresses[0]?.address?
+    {balances} = await retry(5, @iota.api.getBalancesAsync onlyAddresses, 100)
+    if addresses[0]?.address?
+      for balance, i in balances
+        addresses[i].balance = +balance
+    balances
+
   getBalance: (addresses...) ->
-    {balances} = await retry(5, @iota.api.getBalancesAsync addresses, 100)
-    balances.sum()
+    (await @getBalances(addresses)).sum()
+
+  getInputs: (addresses) ->
+    lastThree = addresses.last(3)
+    nonEmpty = addresses[0...-3].filter (a) -> a.balance isnt 0
+    toCheck = nonEmpty.concat(lastThree)
+    for balance, i in (await @getBalances toCheck) when +balance > 0
+      toCheck[i]
 
   getAddress: (seed, keyIndex, security = 2) ->
     address = @iota.api._newAddress seed, keyIndex, security, true
@@ -30,8 +45,15 @@ class IotaWrapper
   findTransactions: (opt) ->
     await retry(5, @iota.api.findTransactionsAsync(opt))
 
-  sendTransfer: (seed, value, address, inputs) ->
-    @iota.api.sendTransferAsync seed, DEPTH, MIN_WEIGHT, [{value, address}], {inputs}
+  wasAddressSpentFrom: (address) ->
+    [wasSpentFrom] = await @iota.api.wereAddressesSpentFromAsync([address.address ? address])
+    wasSpentFrom
+
+  sendTransfer: (seed, value, address, {inputs, remainder} = {}) ->
+    transfer = [{value, address}]
+    options = {inputs, address: remainder}
+    [tx] = await @iota.api.sendTransferAsync seed, DEPTH, MIN_WEIGHT, transfer, options
+    tx
 
   findAddresses: (seed, startingIndex = 0) ->
     addresses = []
@@ -100,4 +122,47 @@ class IotaWrapper
     "#{minus}#{amount / unit} #{symbol}"
 
 
-export default new IotaWrapper
+IOTA = new IotaWrapper
+
+
+class IotaWallet
+  constructor: (@seed) ->
+
+  @create: (seed) ->
+    (new IotaWallet seed).init()
+
+  init: ->
+    cached = localStorage.getItem('iota' + @seed[0..9])
+    @addresses = JSON.parse(cached) if cached
+    if not @addresses?
+      @addresses = await IOTA.findAddresses(@seed)
+      localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
+    this
+
+  nextAddress: ->
+    index = @addresses.last().keyIndex + 1
+    address = IOTA.getAddress(@seed, index)
+    @addresses.push address
+    localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
+    address
+
+  findRemainder: ->
+    address = @addresses.last()
+    while await IOTA.wasAddressSpentFrom(address)
+      address = @nextAddress()
+    address
+
+  send: (value, destination) ->
+    if value > 0
+      log 1
+      inputs =
+        for {address, security, keyIndex, balance} in await IOTA.getInputs(@addresses)
+          {security, keyIndex, balance, address: IOTA.iota.utils.noChecksum(address)}
+      log {inputs}
+      remainder = IOTA.iota.utils.noChecksum((await @findRemainder()).address)
+      log {remainder}
+    log 'sending'
+    await IOTA.sendTransfer(@seed, value, destination.address ? destination, {inputs, remainder})
+
+
+module.exports = {IOTA, IotaWallet}

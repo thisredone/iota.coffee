@@ -1,5 +1,6 @@
 import 'babel-polyfill'
 import './globals'
-import IOTA from './iota_wrapper'
+import {IOTA, IotaWallet} from './iota_wrapper'
 
 window.IOTA = IOTA
+window.IotaWallet = IotaWallet
