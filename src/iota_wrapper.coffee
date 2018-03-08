@@ -22,13 +22,14 @@ class IotaWrapper
   getBalances: (addresses) ->
     onlyAddresses = addresses
     onlyAddresses = addresses.map((a) -> a.address) if addresses[0]?.address?
-    {balances} = await retry(5, @iota.api.getBalancesAsync onlyAddresses, 100)
+    {balances} = await retry(3, @iota.api.getBalancesAsync onlyAddresses, 100)
     if addresses[0]?.address?
       for balance, i in balances
         addresses[i].balance = +balance
     balances
 
   getBalance: (addresses...) ->
+    addresses = addresses[0] if @iota.valid.isArray(addresses[0])
     (await @getBalances(addresses)).sum()
 
   getInputs: (addresses) ->
@@ -43,7 +44,7 @@ class IotaWrapper
     {address, keyIndex, security}
 
   findTransactions: (opt) ->
-    await retry(5, @iota.api.findTransactionsAsync(opt))
+    await retry(3, @iota.api.findTransactionsAsync(opt))
 
   wasAddressSpentFrom: (address) ->
     [wasSpentFrom] = await @iota.api.wereAddressesSpentFromAsync([address.address ? address])
@@ -112,6 +113,17 @@ class IotaWrapper
     addresses.length -= takeLast - 1 - used.lastIndexOf(true)
     addresses
 
+  findTail: (bundle) ->
+    txs = await @iota.api.findTransactionObjectsAsync(bundles: [bundle])
+    txs.find (tx) -> tx.currentIndex is 0
+
+  replay: (tail) ->
+    @ota.api.replayBundleAsync(tail, DEPTH, MIN_WEIGHT)
+
+  promote: (tail) ->
+    transfers = [value: 0, address: '9'.repeat(81)]
+    @iota.api.promoteTransactionAsync(tail, DEPTH, MIN_WEIGHT, transfers, delay: 0)
+
   formatAmount: (amount) ->
     return '' if not amount?
     minus = if amount < 0 then '-' else ''
@@ -123,6 +135,35 @@ class IotaWrapper
 
 
 IOTA = new IotaWrapper
+
+
+class IotaTransaction
+  constructor: ({@hash, @bundle, @tail, timestamp}) ->
+    @createdAt = if timestamp then new Date(timestamp * 1000) else new Date
+
+  isConfirmed: ->
+    return true if @wasConfirmed
+    [res] = await IOTA.iota.api.getLatestInclusionAsync([@hash])
+    @wasConfirmed = res
+
+  getTail: ->
+    return @tail if @tail?
+    @tail = await IOTA.findTail(@bundle)
+
+  reattach: ({force} = {}) ->
+    if not force and (Date.now() - d) < 600000
+      throw 'This tx less than 10 minutes old'
+    tail = await @getTail()
+    txs = await IOTA.replay(tail.hash)
+    txs.map (t) -> t.hash
+
+  promote: ->
+    return if @wasConfirmed
+    count = 0
+    tail = await @getTail()
+    until await @isConfirmed()
+      return if ++count > 10
+      await IOTA.promote(tail.hash)
 
 
 class IotaWallet
@@ -146,6 +187,9 @@ class IotaWallet
     localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
     address
 
+  getBalance: ->
+    IOTA.getBalance(@addresses)
+
   findRemainder: ->
     address = @addresses.last()
     while await IOTA.wasAddressSpentFrom(address)
@@ -154,15 +198,13 @@ class IotaWallet
 
   send: (value, destination) ->
     if value > 0
-      log 1
       inputs =
         for {address, security, keyIndex, balance} in await IOTA.getInputs(@addresses)
           {security, keyIndex, balance, address: IOTA.iota.utils.noChecksum(address)}
-      log {inputs}
       remainder = IOTA.iota.utils.noChecksum((await @findRemainder()).address)
-      log {remainder}
-    log 'sending'
-    await IOTA.sendTransfer(@seed, value, destination.address ? destination, {inputs, remainder})
+      log {remainder, inputs}
+    res = await IOTA.sendTransfer(@seed, value, destination.address ? destination, {inputs, remainder})
+    new IotaTransaction(res)
 
 
-module.exports = {IOTA, IotaWallet}
+module.exports = {IOTA, IotaWallet, IotaTransaction}
