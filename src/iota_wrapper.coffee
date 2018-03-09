@@ -2,6 +2,10 @@ import IotaLib from 'iota.lib.js'
 import Promise from 'bluebird'
 import useLocalAttachToTangle from './lib/local_attach.js'
 
+worker = new Worker('./lib/new_account_worker.coffee')
+worker.onmessageerror = log
+worker.onerror = log
+
 DEPTH = 3
 MIN_WEIGHT = 14
 
@@ -9,8 +13,20 @@ MIN_WEIGHT = 14
 class IotaWrapper
   constructor: ->
     @changeNode('https://nodes.iota.cafe:443')
-    # @changeNode('http://iota.bitfinex.com:80')
-    # @changeNode('http://mainnet.necropaz.com:14500')
+    @_workerRequestId = 0
+    @_workerRequests = {}
+    worker.onmessage = ({data}) =>
+      rid = data?.requestId
+      if rid?
+        delete data.requestId
+        @_workerRequests[rid](data)
+        delete @_workerRequests[rid]
+
+  workerGetAddress: (seed, keyIndex, security = 2) ->
+    rid = @_workerRequestId++
+    new Promise (resolve) =>
+      @_workerRequests[rid] = resolve
+      worker.postMessage({requestId: rid, seed, keyIndex, security})
 
   changeNode: (provider) ->
     @iota = new IotaLib({provider})
@@ -65,10 +81,7 @@ class IotaWrapper
     loop
       indexes = [index, index + jump, index + 2 * jump]
       log "findAddresses: indexes: #{indexes.join(', ')}, jump: #{jump}"
-      adrs = []
-      for i in indexes
-        addresses[i] = @getAddress(seed, i + startingIndex)
-        adrs.push(addresses[i])
+      adrs = await Promise.all indexes.map (i) => @workerGetAddress(seed, i + startingIndex)
 
       if wereAllEmpty
         balances = await @getBalances adrs
@@ -110,8 +123,11 @@ class IotaWrapper
           else
             jump = 1
 
-    for _, i in addresses
-      addresses[i] ?= @getAddress(seed, i + startingIndex)
+    indexesToFill = []
+    for adr, i in addresses
+      indexesToFill.push(i + startingIndex) if not adr?
+    adrs = await Promise.all indexesToFill.map (i) => @workerGetAddress(seed, i)
+    addresses[i] = adrs[i] for _, i in indexesToFill
     takeLast = 10
     toCheck = addresses.last takeLast
     [wereSpentFrom, balances] = await Promise.all [
