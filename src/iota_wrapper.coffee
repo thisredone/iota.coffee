@@ -65,23 +65,31 @@ class IotaWrapper
     loop
       indexes = [index, index + jump, index + 2 * jump]
       log "findAddresses: indexes: #{indexes.join(', ')}, jump: #{jump}"
-      addresses[i] = @getAddress(seed, i + startingIndex) for i in indexes
+      adrs = []
+      for i in indexes
+        addresses[i] = @getAddress(seed, i + startingIndex)
+        adrs.push(addresses[i])
 
-      actives = await @iota.api.wereAddressesSpentFromAsync(addresses[i].address for i in indexes)
+      if wereAllEmpty
+        balances = await @getBalances adrs
+        actives = balances.map (b) -> +b > 0
+      else
+        actives = await @iota.api.wereAddressesSpentFromAsync(adrs.map (a) -> a.address)
       log "actives: #{actives.join(', ')}"
 
       allAreEmpty = actives.indexOf(true) is -1
       if wereAllEmpty and allAreEmpty and jump is 1
-        log "empty twice, ending"
+        log 'empty twice, ending'
         break
       wereAllEmpty = allAreEmpty and jump is 1
 
       if (index - startingIndex) > 999
         throw new Error("No transactions found upto address with index #{index + startingIndex - 1}")
 
-      if allAreEmpty and jump is 1
+      if allAreEmpty and jump <= 1
         log 'allAreEmpty and last jump'
         index = indexes[2] + 1
+        jump = 1
       else if actives[2] and jump > 1
         jump += 3
         index = indexes[2] + 1
@@ -97,19 +105,20 @@ class IotaWrapper
           addresses.length = indexes[0]
           break
         if jump < 0
-          break
+          if allAreEmpty
+            break
+          else
+            jump = 1
 
     for _, i in addresses
       addresses[i] ?= @getAddress(seed, i + startingIndex)
     takeLast = 10
-    toCheck = addresses.last(takeLast).map (a) -> a.address
-
-    [wereSpentFrom, haveTx] = await Promise.all [
-      @iota.api.wereAddressesSpentFromAsync(toCheck)
-      @findTransactions(addresses: toCheck)
+    toCheck = addresses.last takeLast
+    [wereSpentFrom, balances] = await Promise.all [
+      @iota.api.wereAddressesSpentFromAsync(toCheck.map (a) -> a.address)
+      @getBalances(toCheck)
     ]
-    haveTx = toCheck.map (adr) -> adr in haveTx
-    used = wereSpentFrom.map (wasSpentFrom, i) -> wasSpentFrom or haveTx[i]
+    used = wereSpentFrom.map (wasSpentFrom, i) -> wasSpentFrom or balances[i] > 0
     addresses.length -= takeLast - 1 - used.lastIndexOf(true)
     addresses
 
@@ -122,7 +131,12 @@ class IotaWrapper
 
   promote: (tail) ->
     transfers = [value: 0, address: '9'.repeat(81)]
-    @iota.api.promoteTransactionAsync(tail, DEPTH, MIN_WEIGHT, transfers, delay: 0)
+    txs = await @iota.api.promoteTransactionAsync(tail, DEPTH, MIN_WEIGHT, transfers, delay: 0)
+    log "Promoted, hash: #{txs[0].hash}"
+
+  getTransactionObject: (hash) ->
+    txs = await @iota.api.getTransactionsObjectsAsync([hash])
+    txs[0]
 
   formatAmount: (amount) ->
     return '' if not amount?
@@ -147,6 +161,8 @@ class IotaTransaction
     @wasConfirmed = res
 
   getTail: ->
+    if not @bundle?
+      {@bundle, @tail} = await IOTA.getTransactionObject(@hash)
     return @tail if @tail?
     @tail = await IOTA.findTail(@bundle)
 
@@ -196,15 +212,26 @@ class IotaWallet
       address = @nextAddress()
     address
 
-  send: (value, destination) ->
+  getInputs: ->
+    IOTA.getInputs(@addresses)
+
+  send: (value, destination, {inputs, remainder} = {}) ->
     if value > 0
-      inputs =
-        for {address, security, keyIndex, balance} in await IOTA.getInputs(@addresses)
-          {security, keyIndex, balance, address: IOTA.iota.utils.noChecksum(address)}
-      remainder = IOTA.iota.utils.noChecksum((await @findRemainder()).address)
-      log {remainder, inputs}
+      inputs ?= await @getInputs()
+      remainder ?= await @findRemainder()
+    input.address = IOTA.iota.utils.noChecksum(input.address) for input in (inputs || [])
+    remainder = IOTA.iota.utils.noChecksum(remainder.address) if remainder?
+    log {remainder, inputs}
     res = await IOTA.sendTransfer(@seed, value, destination.address ? destination, {inputs, remainder})
     new IotaTransaction(res)
+
+  consolidate: ->
+    remainder = await @findRemainder()
+    inputs = await @getInputs()
+    inputs.pop() if remainder in inputs
+    return if inputs.length is 0
+    amount = await IOTA.getBalance(inputs...)
+    @send(amount, remainder, {remainder, inputs})
 
 
 module.exports = {IOTA, IotaWallet, IotaTransaction}
