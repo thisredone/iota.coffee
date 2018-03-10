@@ -168,7 +168,7 @@ IOTA = new IotaWrapper
 
 
 class IotaTransaction
-  constructor: ({@hash, @bundle, @tail, timestamp}) ->
+  constructor: ({@hash, @value, @bundle, @tail, timestamp}) ->
     @createdAt = if timestamp then new Date(timestamp * 1000) else new Date
 
   isConfirmed: ->
@@ -176,11 +176,12 @@ class IotaTransaction
     [res] = await IOTA.iota.api.getLatestInclusionAsync([@hash])
     @wasConfirmed = res
 
+  update: ->
+    {@bundle, @tail, @value} = await IOTA.getTransactionObject(@hash)
+
   getTail: ->
-    if not @bundle?
-      {@bundle, @tail} = await IOTA.getTransactionObject(@hash)
-    return @tail if @tail?
-    @tail = await IOTA.findTail(@bundle)
+    @update() if not @bundle?
+    @tail ?= await IOTA.findTail(@bundle)
 
   reattach: ({force} = {}) ->
     if not force and (Date.now() - d) < 600000
@@ -189,12 +190,12 @@ class IotaTransaction
     txs = await IOTA.replay(tail.hash)
     txs.map (t) -> t.hash
 
-  promote: ->
+  promote: ({times = 5} = {}) ->
     return if @wasConfirmed
     count = 0
     tail = await @getTail()
     until await @isConfirmed()
-      return if ++count > 10
+      return if ++count > times
       await IOTA.promote(tail.hash)
 
 
@@ -214,7 +215,7 @@ class IotaWallet
 
   nextAddress: ->
     index = @addresses.last().keyIndex + 1
-    address = IOTA.getAddress(@seed, index)
+    address = await IOTA.workerGetAddress(@seed, index)
     @addresses.push address
     localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
     address
@@ -225,7 +226,7 @@ class IotaWallet
   findRemainder: ->
     address = @addresses.last()
     while await IOTA.wasAddressSpentFrom(address)
-      address = @nextAddress()
+      address = await @nextAddress()
     address
 
   getInputs: ->
@@ -234,7 +235,11 @@ class IotaWallet
   send: (value, destination, {inputs, remainder} = {}) ->
     if value > 0
       inputs ?= await @getInputs()
-      remainder ?= await @findRemainder()
+      throw 'Not enough balance' if inputs.sum('balance') < value
+      if not remainder?
+        remainder = await @findRemainder()
+        if remainder in inputs and inputs[0...-1].sum('balance') < value
+          remainder = await @nextAddress()
     input.address = IOTA.iota.utils.noChecksum(input.address) for input in (inputs || [])
     remainder = IOTA.iota.utils.noChecksum(remainder.address) if remainder?
     log {remainder, inputs}

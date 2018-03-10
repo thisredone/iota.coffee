@@ -31,5 +31,8 @@ window.waitFor = (timeout, fn) ->
 Array::last = (n) ->
   if n then @[@length - n...@length] else @[@length - 1]
 
-Array::sum = ->
-  @reduce ((x, y) -> +x + +y), 0
+Array::sum = (key) ->
+  if key?
+    @reduce ((x, y) -> x + +y[key]), 0
+  else
+    @reduce ((x, y) -> x + +y), 0
