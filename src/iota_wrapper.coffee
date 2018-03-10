@@ -135,7 +135,9 @@ class IotaWrapper
       @getBalances(toCheck)
     ]
     used = wereSpentFrom.map (wasSpentFrom, i) -> wasSpentFrom or balances[i] > 0
-    addresses.length -= takeLast - 1 - used.lastIndexOf(true)
+    lastUsedIndex = used.lastIndexOf(true)
+    lastUsedIndex++ if wereSpentFrom[lastUsedIndex]
+    addresses.length -= takeLast - 1 - lastUsedIndex
     addresses
 
   findTail: (bundle) ->
