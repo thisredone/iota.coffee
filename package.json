@@ -1,6 +1,6 @@
 {
   "name": "iota.coffee",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Wrapper around iota.lib.js written in CoffeeScript",
   "main": "dist/index.js",
   "repository": {
