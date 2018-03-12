@@ -1,6 +1,7 @@
 import IotaLib from 'iota.lib.js'
 import Promise from 'bluebird'
 import useLocalAttachToTangle from './lib/local_attach'
+log = console.log.bind(console)
 
 worker = new Worker('./lib/new_account_worker.coffee')
 worker.onmessageerror = log
@@ -8,6 +9,26 @@ worker.onerror = log
 
 DEPTH = 3
 MIN_WEIGHT = 14
+
+
+retry = (times, promise) ->
+  n = times
+  delay = 1500
+  loop
+    try
+      return await promise
+    catch e
+      throw new Error("Retried #{n} times and failed, last error: #{e.message}") if --times < 0
+      log e
+      await Promise.delay(Math.min(delay *= 1.3, 30 * 1000))
+
+
+sum = (arr, key) ->
+  if key?
+    arr.reduce ((x, y) -> x + +y[key]), 0
+  else
+    arr.reduce ((x, y) -> x + +y), 0
+
 
 
 class IotaWrapper
@@ -46,10 +67,10 @@ class IotaWrapper
 
   getBalance: (addresses...) ->
     addresses = addresses[0] if @iota.valid.isArray(addresses[0])
-    (await @getBalances(addresses)).sum()
+    sum (await @getBalances addresses)
 
   getInputs: (addresses) ->
-    lastThree = addresses.last(3)
+    lastThree = addresses.slice(-3)
     nonEmpty = addresses[0...-3].filter (a) -> a.balance isnt 0
     toCheck = nonEmpty.concat(lastThree)
     for balance, i in (await @getBalances toCheck) when +balance > 0
@@ -129,7 +150,7 @@ class IotaWrapper
     adrs = await Promise.all indexesToFill.map (i) => @workerGetAddress(seed, i)
     addresses[i] = adrs[i] for _, i in indexesToFill
     takeLast = Math.min(addresses.length, 10)
-    toCheck = addresses.last takeLast
+    toCheck = addresses.slice(-takeLast)
     [wereSpentFrom, balances] = await Promise.all [
       @iota.api.wereAddressesSpentFromAsync(toCheck.map (a) -> a.address)
       @getBalances(toCheck)
@@ -213,23 +234,23 @@ class IotaWallet
     if not @addresses?
       @addresses = await IOTA.findAddresses(@seed)
       localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
+    @lastAddress = @addresses[@addresses.length - 1]
     this
 
   nextAddress: ->
-    index = @addresses.last().keyIndex + 1
-    address = await IOTA.workerGetAddress(@seed, index)
-    @addresses.push address
+    index = @lastAddress.keyIndex + 1
+    @lastAddress = await IOTA.workerGetAddress(@seed, index)
+    @addresses.push @lastAddress
     localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
-    address
+    @lastAddress
 
   getBalance: ->
     IOTA.getBalance(@addresses)
 
   findRemainder: ->
-    address = @addresses.last()
-    while await IOTA.wasAddressSpentFrom(address)
-      address = await @nextAddress()
-    address
+    while await IOTA.wasAddressSpentFrom(@lastAddress)
+      await @nextAddress()
+    @lastAddress
 
   getInputs: ->
     IOTA.getInputs(@addresses)
@@ -237,10 +258,10 @@ class IotaWallet
   send: (value, destination, {inputs, remainder} = {}) ->
     if value > 0
       inputs ?= await @getInputs()
-      throw 'Not enough balance' if inputs.sum('balance') < value
+      throw 'Not enough balance' if sum(inputs, 'balance') < value
       if not remainder?
         remainder = await @findRemainder()
-        if remainder in inputs and inputs[0...-1].sum('balance') < value
+        if remainder in inputs and sum(inputs[0...-1], 'balance') < value
           remainder = await @nextAddress()
     input.address = IOTA.iota.utils.noChecksum(input.address) for input in (inputs || [])
     remainder = IOTA.iota.utils.noChecksum(remainder.address) if remainder?
