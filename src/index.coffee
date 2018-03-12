@@ -3,10 +3,6 @@ import Promise from 'bluebird'
 import useLocalAttachToTangle from './lib/local_attach'
 log = console.log.bind(console)
 
-worker = new Worker('./lib/new_account_worker.coffee')
-worker.onmessageerror = log
-worker.onerror = log
-
 DEPTH = 3
 MIN_WEIGHT = 14
 
@@ -30,24 +26,44 @@ sum = (arr, key) ->
     arr.reduce ((x, y) -> x + +y), 0
 
 
-
-class IotaWrapper
+class WorkerPool
   constructor: ->
-    @changeNode('https://nodes.iota.cafe:443')
-    @_workerRequestId = 0
-    @_workerRequests = {}
+    @workerRequestId = 0
+    @workerRequests = {}
+    @totalCount = 0
+    @current = 0
+    @workers = []
+
+  add: (worker) ->
     worker.onmessage = ({data}) =>
       rid = data?.requestId
       if rid?
         delete data.requestId
-        @_workerRequests[rid](data)
-        delete @_workerRequests[rid]
+        @workerRequests[rid](data)
+        delete @workerRequests[rid]
+    @workers.push(worker)
+    @totalCount++
+
+  task: (job, message) ->
+    throw new Error('No wokers added through IOTA.addWorker') if @totalCount is 0
+    @current = 0 if ++@current is @totalCount
+    worker = @workers[@current]
+    rid = @workerRequestId++
+    new Promise (resolve) =>
+      @workerRequests[rid] = resolve
+      worker.postMessage Object.assign({job, requestId: rid}, message)
+
+
+class IotaWrapper
+  constructor: ->
+    @workers = new WorkerPool
+    @changeNode('https://nodes.iota.cafe:443')
+
+  addWorker: (worker) ->
+    @workers.add(worker)
 
   workerGetAddress: (seed, keyIndex, security = 2) ->
-    rid = @_workerRequestId++
-    new Promise (resolve) =>
-      @_workerRequests[rid] = resolve
-      worker.postMessage({requestId: rid, seed, keyIndex, security})
+    @workers.task('newAddress', {seed, keyIndex, security})
 
   changeNode: (provider) ->
     @iota = new IotaLib({provider})
@@ -203,7 +219,7 @@ class IotaTransaction
     {@bundle, @tail, @value} = await IOTA.getTransactionObject(@hash)
 
   getTail: ->
-    @update() if not @bundle?
+    await @update() if not @bundle?
     @tail ?= await IOTA.findTail(@bundle)
 
   reattach: ({force} = {}) ->
@@ -215,10 +231,8 @@ class IotaTransaction
 
   promote: ({times = 5} = {}) ->
     return if @wasConfirmed
-    count = 0
     tail = await @getTail()
-    until await @isConfirmed()
-      return if ++count > times
+    until --times < 0 or await @isConfirmed()
       await IOTA.promote(tail.hash)
 
 
