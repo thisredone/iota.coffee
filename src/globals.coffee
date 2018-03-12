@@ -29,7 +29,7 @@ window.waitFor = (timeout, fn) ->
   true
 
 Array::last = (n) ->
-  if n then @[@length - n...@length] else @[@length - 1]
+  if n then @slice(-n) else @[@length - 1]
 
 Array::sum = (key) ->
   if key?
