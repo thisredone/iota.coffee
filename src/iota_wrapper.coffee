@@ -1,6 +1,6 @@
 import IotaLib from 'iota.lib.js'
 import Promise from 'bluebird'
-import useLocalAttachToTangle from './lib/local_attach.js'
+import useLocalAttachToTangle from './lib/local_attach'
 
 worker = new Worker('./lib/new_account_worker.coffee')
 worker.onmessageerror = log
