@@ -115,7 +115,7 @@ class IotaWrapper
           index = indexes[0] + 1
           addresses.length = indexes[1] + 1
         else
-          addresses.length = indexes[0]
+          addresses.length = indexes[0] + 1
           break
         if jump < 0
           if allAreEmpty
@@ -128,14 +128,14 @@ class IotaWrapper
       indexesToFill.push(i + startingIndex) if not adr?
     adrs = await Promise.all indexesToFill.map (i) => @workerGetAddress(seed, i)
     addresses[i] = adrs[i] for _, i in indexesToFill
-    takeLast = 10
+    takeLast = Math.min(addresses.length, 10)
     toCheck = addresses.last takeLast
     [wereSpentFrom, balances] = await Promise.all [
       @iota.api.wereAddressesSpentFromAsync(toCheck.map (a) -> a.address)
       @getBalances(toCheck)
     ]
     used = wereSpentFrom.map (wasSpentFrom, i) -> wasSpentFrom or balances[i] > 0
-    lastUsedIndex = used.lastIndexOf(true)
+    lastUsedIndex = Math.max(0, used.lastIndexOf true)
     lastUsedIndex++ if wereSpentFrom[lastUsedIndex]
     addresses.length -= takeLast - 1 - lastUsedIndex
     addresses
