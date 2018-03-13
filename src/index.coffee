@@ -62,9 +62,6 @@ class IotaWrapper
   addWorker: (worker) ->
     @workers.add(worker)
 
-  workerGetAddress: (seed, keyIndex, security = 2) ->
-    @workers.task('newAddress', {seed, keyIndex, security})
-
   changeNode: (provider) ->
     @iota = new IotaLib({provider})
     @utils = @iota.utils
@@ -93,8 +90,11 @@ class IotaWrapper
       toCheck[i]
 
   getAddress: (seed, keyIndex, security = 2) ->
-    address = @iota.api._newAddress seed, keyIndex, security, true
-    {address, keyIndex, security}
+    if @workers.totalCount isnt 0
+      @workers.task('newAddress', {seed, keyIndex, security})
+    else
+      address = @iota.api._newAddress seed, keyIndex, security, true
+      {address, keyIndex, security}
 
   findTransactions: (opt) ->
     await retry(3, @iota.api.findTransactionsAsync(opt))
@@ -118,7 +118,7 @@ class IotaWrapper
     loop
       indexes = [index, index + jump, index + 2 * jump]
       log "findAddresses: indexes: #{indexes.join(', ')}, jump: #{jump}"
-      adrs = await Promise.all indexes.map (i) => @workerGetAddress(seed, i + startingIndex)
+      adrs = await Promise.all indexes.map (i) => @getAddress(seed, i + startingIndex)
 
       if wereAllEmpty
         balances = await @getBalances adrs
@@ -163,7 +163,7 @@ class IotaWrapper
     indexesToFill = []
     for adr, i in addresses
       indexesToFill.push(i + startingIndex) if not adr?
-    adrs = await Promise.all indexesToFill.map (i) => @workerGetAddress(seed, i)
+    adrs = await Promise.all indexesToFill.map (i) => @getAddress(seed, i)
     addresses[i] = adrs[i] for _, i in indexesToFill
     takeLast = Math.min(addresses.length, 10)
     toCheck = addresses.slice(-takeLast)
@@ -253,7 +253,7 @@ class IotaWallet
 
   nextAddress: ->
     index = @lastAddress.keyIndex + 1
-    @lastAddress = await IOTA.workerGetAddress(@seed, index)
+    @lastAddress = await IOTA.getAddress(@seed, index)
     @addresses.push @lastAddress
     localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
     @lastAddress
