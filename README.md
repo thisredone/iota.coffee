@@ -6,7 +6,7 @@ Don't use with your actual seed. This is experimental work and **should not** be
 
 ## iota.coffee
 
-Wrapper for the browser around iota.lib.js with @iota-pico/pov-webgl for local PoW.
+Wrapper for the browser around iota.lib.js with [iota-pico/pov-webgl](https://github.com/iotaeco/iota-pico-pow-webgl) for local PoW.
 
 It exposes `IOTA`, `IotaWallet` and `IotaTransaction`.
 `IOTA` is a wrapped and `promisyAll`'ed [iotaledger/iota.lib.js](https://github.com/iotaledger/iota.lib.js/). It has a bunch of functions declared but most of them don't need to be used directly.
