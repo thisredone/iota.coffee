@@ -28,9 +28,11 @@ ccurlHashing = (iota, trunkTransaction, branchTransaction, minWeightMagnitude, t
       txObject.branchTransaction = branchTransaction
 
     packedTrytes = Trytes.create(iota.utils.transactionTrytes txObject)
+    startedAt = Date.now()
     curl = new CurlProofOfWork()
     await curl.initialize()
     newTrytes = await curl.pow packedTrytes, minWeightMagnitude
+    console.log "PoW took: #{(Date.now() - startedAt).toFixed(2)}s"
     newTxObject = iota.utils.transactionObject newTrytes.toString()
     previousTxHash = newTxObject.hash
     finalBundleTrytes.unshift newTrytes.toString()
@@ -38,7 +40,7 @@ ccurlHashing = (iota, trunkTransaction, branchTransaction, minWeightMagnitude, t
   finalBundleTrytes
 
 
-export default (iota) ->
+module.exports = (iota) ->
   localAttachToTangle = (trunkTransaction, branchTransaction, minWeightMagnitude, trytes, callback) ->
     console.log 'Light Wallet: localAttachToTangle'
     try

@@ -1,6 +1,6 @@
-import IotaLib from 'iota.lib.js'
-import Promise from 'bluebird'
-import useLocalAttachToTangle from './lib/local_attach'
+IotaLib = require 'iota.lib.js'
+Promise = require 'bluebird'
+useLocalAttachToTangle = require './lib/local_attach'
 log = console.log.bind(console)
 
 DEPTH = 3
@@ -243,11 +243,11 @@ class IotaWallet
     (new IotaWallet seed).init()
 
   init: ->
-    cached = localStorage.getItem('iota' + @seed[0..9])
+    cached = localStorage?.getItem('iota' + @seed[0..9])
     @addresses = JSON.parse(cached) if cached
     if not @addresses?
       @addresses = await IOTA.findAddresses(@seed)
-      localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
+      localStorage?.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
     @lastAddress = @addresses[@addresses.length - 1]
     this
 
@@ -255,7 +255,7 @@ class IotaWallet
     index = @lastAddress.keyIndex + 1
     @lastAddress = await IOTA.getAddress(@seed, index)
     @addresses.push @lastAddress
-    localStorage.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
+    localStorage?.setItem('iota' + @seed[0..9], JSON.stringify(@addresses))
     @lastAddress
 
   getBalance: ->

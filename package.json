@@ -2,7 +2,7 @@
   "name": "iota.coffee",
   "version": "1.0.4",
   "description": "Wrapper around iota.lib.js written in CoffeeScript",
-  "main": "dist/index.js",
+  "main": "index.js",
   "repository": {
     "type": "git",
     "url": "https://github.com/thisredone/iota.coffee.git"
@@ -25,9 +25,13 @@
     "url": "https://github.com/thisredone/iota.coffee/issues"
   },
   "files": [
-    "dist/"
+    "lib/",
+    "index.js",
+    "repl.js"
   ],
   "scripts": {
-    "build": "coffee -tcbo dist src"
+    "watch": "coffee -wtcbo . src",
+    "prepublish": "coffee -tcbo . src",
+    "repl": "coffee src/index.coffee repl"
   }
 }
