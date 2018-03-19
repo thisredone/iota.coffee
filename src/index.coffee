@@ -1,3 +1,4 @@
+require 'babel-polyfill'
 IotaLib = require 'iota.lib.js'
 Promise = require 'bluebird'
 useLocalAttachToTangle = require './lib/local_attach'

@@ -31,8 +31,7 @@ yarn add @iota-pico/pow-nodejs
 ### Importing
 
 ```coffeescript
-import 'babel-polyfill'
-import {IOTA, IotaWallet, IotaTransaction} from 'iota.coffee'
+{IOTA, IotaWallet, IotaTransaction} = require 'iota.coffee'
 ```
 
 
