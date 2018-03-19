@@ -1,5 +1,4 @@
 {IOTA, IotaWallet, IotaTransaction} = require './index'
+pry = require 'pry'
 
-if process?.argv[2] is 'repl'
-  pry = require 'pry'
-  eval pry.it
+eval pry.it

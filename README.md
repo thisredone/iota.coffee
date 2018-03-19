@@ -6,7 +6,9 @@ Don't use with your actual seed. This is experimental work and **should not** be
 
 ## iota.coffee
 
-Wrapper for the browser around iota.lib.js with [iota-pico/pov-webgl](https://github.com/iotaeco/iota-pico-pow-webgl) for local PoW.
+Wrapper for the browser and node.js around [iotaledger/iota.lib.js](https://github.com/iotaledger/iota.lib.js) with local PoW using:
+* for borwser: [@iota-pico/pow-webgl](https://github.com/iotaeco/iota-pico-pow-webgl)
+* for node.js [@iota-pico/pow-nodejs](https://github.com/iotaeco/iota-pico-pow-nodejs)
 
 It exposes `IOTA`, `IotaWallet` and `IotaTransaction`.
 `IOTA` is a wrapped and `promisyAll`'ed [iotaledger/iota.lib.js](https://github.com/iotaledger/iota.lib.js/). It has a bunch of functions declared but most of them don't need to be used directly.
@@ -18,6 +20,14 @@ It exposes `IOTA`, `IotaWallet` and `IotaTransaction`.
 yarn add iota.coffee
 ```
 
+
+### nodejs
+In order for PoW work in node.js you need to install [@iota-pico/pow-nodejs](https://github.com/iotaeco/iota-pico-pow-nodejs)
+```bash
+yarn add @iota-pico/pow-nodejs
+```
+
+
 ### Importing
 
 ```coffeescript
@@ -28,7 +38,7 @@ import {IOTA, IotaWallet, IotaTransaction} from 'iota.coffee'
 
 ### Selecting the node
 
-By default it uses `https://nodes.iota.cafe:443` so you don't _need_ to do anything. 
+By default it uses `https://nodes.iota.cafe:443` so you don't _need_ to do anything.
 
 ```coffeescript
 IOTA.changeNode('https://node.tangle.works:443')

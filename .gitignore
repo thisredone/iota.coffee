@@ -4,3 +4,4 @@ src/test.coffee
 index.js
 repl.js
 lib/
+yarn-error.log

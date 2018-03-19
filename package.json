@@ -32,6 +32,9 @@
   "scripts": {
     "watch": "coffee -wtcbo . src",
     "prepublish": "coffee -tcbo . src",
-    "repl": "coffee src/index.coffee repl"
+    "repl": "coffee src/repl.coffee"
+  },
+  "peerDependencies": {
+    "@iota-pico/pow-nodejs": "^0.9.1"
   }
 }

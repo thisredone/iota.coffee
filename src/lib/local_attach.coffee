@@ -1,4 +1,10 @@
-{CurlProofOfWork} = require "@iota-pico/pow-webgl/dist/curlProofOfWork"
+IS_NODE_JS = not window?
+
+if IS_NODE_JS
+  {ProofOfWorkNodeJs} = require "@iota-pico/pow-nodejs"
+else
+  {CurlProofOfWork} = require "@iota-pico/pow-webgl/dist/curlProofOfWork"
+
 {Trytes} = require "@iota-pico/data"
 
 MAX_TIMESTAMP_VALUE = (Math.pow(3,27) - 1) / 2
@@ -29,10 +35,13 @@ ccurlHashing = (iota, trunkTransaction, branchTransaction, minWeightMagnitude, t
 
     packedTrytes = Trytes.create(iota.utils.transactionTrytes txObject)
     startedAt = Date.now()
-    curl = new CurlProofOfWork()
+    curl = new (ProofOfWorkNodeJs ? CurlProofOfWork)
     await curl.initialize()
-    newTrytes = await curl.pow packedTrytes, minWeightMagnitude
-    console.log "PoW took: #{(Date.now() - startedAt).toFixed(2)}s"
+    if IS_NODE_JS
+      newTrytes = await curl.pow undefined, undefined, [packedTrytes], minWeightMagnitude
+    else
+      newTrytes = await curl.pow packedTrytes, minWeightMagnitude
+    console.log "PoW took: #{((Date.now() - startedAt) / 1000).toFixed(2)}s"
     newTxObject = iota.utils.transactionObject newTrytes.toString()
     previousTxHash = newTxObject.hash
     finalBundleTrytes.unshift newTrytes.toString()
