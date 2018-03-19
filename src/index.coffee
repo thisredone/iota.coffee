@@ -57,7 +57,7 @@ class WorkerPool
 class IotaWrapper
   constructor: ->
     @workers = new WorkerPool
-    @changeNode('https://nodes.iota.cafe:443')
+    @changeNode('https://field.carriota.com:443')
 
   addWorker: (worker) ->
     @workers.add(worker)

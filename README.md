@@ -38,10 +38,10 @@ import {IOTA, IotaWallet, IotaTransaction} from 'iota.coffee'
 
 ### Selecting the node
 
-By default it uses `https://nodes.iota.cafe:443` so you don't _need_ to do anything.
+By default it uses `https://field.carriota.com:443` so you don't _need_ to do anything.
 
 ```coffeescript
-IOTA.changeNode('https://node.tangle.works:443')
+IOTA.changeNode('https://nodes.iota.cafe:443')
 ```
 
 
