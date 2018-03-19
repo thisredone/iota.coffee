@@ -104,9 +104,9 @@ class IotaWrapper
     [wasSpentFrom] = await @iota.api.wereAddressesSpentFromAsync([address.address ? address])
     wasSpentFrom
 
-  sendTransfer: (seed, value, address, {inputs, remainder} = {}) ->
+  sendTransfer: (seed, value, address, {inputs, remainder, reference} = {}) ->
     transfer = [{value, address}]
-    options = {inputs, address: remainder}
+    options = {inputs, reference, address: remainder}
     [tx] = await @iota.api.sendTransferAsync seed, DEPTH, MIN_WEIGHT, transfer, options
     tx
 
