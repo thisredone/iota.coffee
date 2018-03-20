@@ -33,7 +33,7 @@ ccurlHashing = (iota, trunkTransaction, branchTransaction, minWeightMagnitude, t
       txObject.trunkTransaction = trunkTransaction
       txObject.branchTransaction = branchTransaction
 
-    packedTrytes = Trytes.create(iota.utils.transactionTrytes txObject)
+    packedTrytes = Trytes.fromString(iota.utils.transactionTrytes txObject)
     startedAt = Date.now()
     curl = new (ProofOfWorkNodeJs ? CurlProofOfWork)
     await curl.initialize()

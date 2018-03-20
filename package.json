@@ -16,7 +16,7 @@
     "pry": "^0.8.1"
   },
   "dependencies": {
-    "@iota-pico/pow-webgl": "^0.6.1",
+    "@iota-pico/pow-webgl": "^0.9.1",
     "babel-polyfill": "^6.26.0",
     "bluebird": "^3.5.1",
     "iota.lib.js": "^0.4.7"
